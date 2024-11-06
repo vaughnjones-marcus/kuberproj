@@ -7,7 +7,7 @@ from kubernetes import client, config
 # python3 /Users/marcusvaughnjones/k8s/MFmon.py
 config.load_kube_config()
 
-r = redis.Redis(host='localhost', port=6379, db=0)
+r = redis.Redis(host='redis-service', port=6379, db=0)
 
 # Initialize metrics in Redis
 r.set("cpu", 30)
