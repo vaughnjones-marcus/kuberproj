@@ -5,11 +5,11 @@ import threading
 from kubernetes import client, config
 
 #use in cluster config since we are local
-config.load_incluster_config()
+#config.load_incluster_config()
 
 # python3 /Users/marcusvaughnjones/k8s/MFmon.py
 
-r = redis.Redis(host='redis-service', port=6379, db=0)
+r = redis.Redis(host='localhost', port=6379, db=0)
 
 # Initialize metrics in Redis
 r.set("cpu", 30)
