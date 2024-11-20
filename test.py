@@ -1,126 +1,141 @@
+#python3 /Users/marcusvaughnjones/k8s/test.py
 import redis
 import random
 import time
 import threading
 from kubernetes import client, config
 
-#use in cluster config since we are local
-#config.load_incluster_config()
-
-# python3 /Users/marcusvaughnjones/k8s/MFmon.py
+# Use in-cluster config since we are local
+# config.load_incluster_config()
 
 r = redis.Redis(host='localhost', port=6379, db=0)
 
 # Initialize metrics in Redis
-r.set("cpu", 30)
-r.set("dasd", 20)
-r.set("pagein", 10)
-r.set("pageout", 28)
-r.set("iops", 120)
+default_metrics = {
+    "cpu": 30,
+    "dasd": 20,
+    "pagein": 10,
+    "pageout": 28,
+    "iops": 120
+}
 
-def high_cpu():
-    # Simulate high CPU usage
-    cpu = random.randint(80, 99)
-    r.set("cpu", cpu)  # Update CPU in Redis
-    metrics = {
-            "cpu": f"{int(r.get('cpu'))}%",  # Adding % symbol to cpu
-            "dasd": f"{int(r.get('dasd'))}%",  # Adding % symbol to dasd
-            "pagein": int(r.get("pagein")),
-            "pageout": int(r.get("pageout")),
-            "iops": int(r.get("iops")),
-        }
+for key, value in default_metrics.items():
+    r.set(key, value)
+
+# Set flags to indicate when metrics are in a high state
+high_state = {
+    "cpu": False,
+    "dasd": False,
+    "pagein": False,
+    "pageout": False,
+    "iops": False
+}
+
+# Healthy ranges for each metric
+healthy_ranges = {
+    "cpu": (30, 60),
+    "dasd": (10, 40),
+    "pagein": (5, 20),
+    "pageout": (5, 25),
+    "iops": (100, 200)
+}
+for key, value in default_metrics.items():
+    r.set(key, value)
+    r.set(f"high_state_{key}", 0)  # 0 = False, 1 = True
     
-    print("High CPU metrics:", metrics)
+def high_cpu():
+    cpu = random.randint(80, 99)
+    r.set("cpu", cpu)
+    high_state["cpu"] = True  # Set the CPU high state flag
+    print("High CPU metrics:", get_metrics())
     check_and_trigger_pod(cpu)
 
 def high_dasd():
-    print("high dasd no logic")
+    dasd = random.randint(80, 99)
+    r.set("dasd", dasd)
+    high_state["dasd"] = True
+    print("High DASD metrics:", get_metrics())
 
 def high_iops():
-    print("high iops no logic")
+    iops = random.randint(400, 500)
+    r.set("iops", iops)
+    high_state["iops"] = True
+    print("High IOPS metrics:", get_metrics())
 
 def high_pagein():
-    print("high pagein no logic")
+    pagein = random.randint(80, 100)
+    r.set("pagein", pagein)
+    high_state["pagein"] = True
+    print("High Page In metrics:", get_metrics())
 
 def high_pageout():
-    print("high pageout no logic")
+    pageout = random.randint(40, 60)
+    r.set("pageout", pageout)
+    high_state["pageout"] = True
+    print("High Page Out metrics:", get_metrics())
 
+# List of high-metrics functions for random selection
 high_metrics_functions = [high_cpu, high_dasd, high_iops, high_pagein, high_pageout]
 
 def check_and_trigger_pod(cpu):
-    if cpu > 75:
-        print("High workload detected. Triggring a maintnence Pod")
-
+    for metric, is_high in high_state.items():
+        if is_high:  # If any metric is in a high state
+            print(f"High workload detected for {metric}. Triggering a maintenance pod.")
         # Define pod metadata and specifications
-        pod_name = "maitnence-pod"
-        namespace = "default"  # Change if your pod needs to be in a specific namespace
+        pod_name = "maintenance-pod"
+        namespace = "default"
         pod_template = client.V1Pod(
             metadata=client.V1ObjectMeta(name=pod_name),
             spec=client.V1PodSpec(
                 containers=[client.V1Container(
-                    name="maitnence",
-                    image="your-container-image",  # Replace with your container image
-                    command=["python", "/Users/marcusvaughnjones/MFmon.py"],  # Replace with your script path
+                    name="maintenance",
+                    image="maintenance-pod-image",
+                    command=["python", "/Users/marcusvaughnjones/maintenance.py"],
                 )]
             )
         )
 
-        # Initialize the Kubernetes API
         v1 = client.CoreV1Api()
-
-        # Try to create the pod, if it doesn’t already exist
         try:
             v1.create_namespaced_pod(namespace=namespace, body=pod_template)
             print(f"Pod {pod_name} created.")
         except client.exceptions.ApiException as e:
-            if e.status == 409:  # Conflict error, pod already exists
+            if e.status == 409:  # Pod already exists
                 print(f"Pod {pod_name} already exists.")
             else:
                 print(f"Failed to create pod: {e}")
 
+def get_metrics():
+    return {
+        "cpu": f"{int(r.get('cpu'))}%",
+        "dasd": f"{int(r.get('dasd'))}%",
+        "pagein": int(r.get("pagein")),
+        "pageout": int(r.get("pageout")),
+        "iops": int(r.get("iops")),
+    }
 
-# Dedicating a thread to displaying mainframe metrics 
+# Display metrics and maintain healthy ranges unless a high state is active
 def display_metrics():
     while True:
-        # Generate random values for each metric
-        cpu = random.randint(30, 75)
-        dasd = random.randint(10, 85)
-        pagein = random.randint(5, 100)
-        pageout = random.randint(5, 50)
-        iops = random.randint(100, 500)
+        for metric, (low, high) in healthy_ranges.items():
+            if not high_state[metric]:  # Only adjust if not in a high state
+                value = random.randint(low, high)
+                r.set(metric, value)
 
-        # Update metrics in Redis
-        r.set("cpu", cpu)
-        r.set("dasd", dasd)
-        r.set("pagein", pagein)
-        r.set("pageout", pageout)
-        r.set("iops", iops)
-
-        metrics = {
-            "cpu": f"{int(r.get('cpu'))}%",  # Adding % symbol to cpu
-            "dasd": f"{int(r.get('dasd'))}%",  # Adding % symbol to dasd
-            "pagein": int(r.get("pagein")),
-            "pageout": int(r.get("pageout")),
-            "iops": int(r.get("iops")),
-        }
-        print("Current Mainframe metrics:", metrics)
+        print("Current Mainframe metrics:", get_metrics())
         time.sleep(5)
+
 metrics_thread = threading.Thread(target=display_metrics, daemon=True)
 metrics_thread.start()
 
 def main():
-# Main loop to display metrics and accept user input
     try:
         while True:
-
-            # Check for user input
             selected_function = random.choice(high_metrics_functions)
             print(f"Running {selected_function.__name__}")
             selected_function()
             time.sleep(30)
-
     except KeyboardInterrupt:
         print("Program interrupted. Exiting...")
 
 main()
-# python3 /Users/marcusvaughnjones/k8s/MFmon.py

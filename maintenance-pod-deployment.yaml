@@ -1,21 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: monitor-pod
+  name: maintenance-pod
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: monitor
+      app: maintenance
   template:
     metadata:
       labels:
-        app: monitor
+        app: maintenance
     spec:
-      serviceAccountName: monitor-sa
       containers:
-      - name: monitor-container
-        image: marcusvj/monitor-pod:latest
+      - name: maintenance-container
+        image: marcusvj/maitenance-pod:latest
         resources:
           limits:
             cpu: "200m"
